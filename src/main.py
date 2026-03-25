@@ -1,1 +1,8 @@
-print("Hello world!")
+from fastapi import FastAPI
+
+app = FastAPI()
+
+
+@app.get("/")
+def read_root() -> dict[str, str]:
+    return {"status": "ok", "message": "System is runnig!"}
