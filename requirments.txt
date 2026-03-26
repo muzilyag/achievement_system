@@ -1,7 +1,0 @@
-flake8
-fastapi
-uvicorn
-sqlalchemy
-asyncpg
-aio-pika
-pydantic
