@@ -8,6 +8,13 @@ class EventPayload(BaseModel):
 
 
 class AchievementCreate(BaseModel):
+    name: str
+    action_type: str
+    target_value: int
+    reward_id: str
+
+
+class AchievementRead(AchievementCreate):
     id: int
-    goal: int 
-    reward_type: str
+    class Config:
+        from_attributes = True
