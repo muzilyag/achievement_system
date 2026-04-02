@@ -68,5 +68,18 @@ services:
         condition: service_healthy
     command: ["python", "-m", "src.worker"]
 
+  outbox-relay:
+    build: .
+    container_name: python-outbox-relay
+    volumes:
+    - ./src:/app/src
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "-m", "src.outbox_relay"]
+
 volumes:
   pg_data:

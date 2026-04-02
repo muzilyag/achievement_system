@@ -16,5 +16,6 @@ class AchievementCreate(BaseModel):
 
 class AchievementRead(AchievementCreate):
     id: int
+
     class Config:
         from_attributes = True

@@ -4,11 +4,11 @@ import asyncio
 import aio_pika
 from sqlalchemy.future import select
 from src.database import async_session_maker
-from src.models import Achievement, PlayerProgress
+from src.models import Achievement, PlayerProgress, OutboxEvent
+from sqlalchemy.ext.asyncio import AsyncSession
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
-from sqlalchemy.ext.asyncio import AsyncSession
 
 class AchievementManager:
     def __init__(self, db_session: AsyncSession):
@@ -37,12 +37,22 @@ class AchievementManager:
                 self.db.add(progress)
 
             progress.increment(event["value"])
-            
             just_completed = progress.check_completion(ach.target_value)
 
             if just_completed:
                 print(f"REWARD TRIGGER: Send {ach.reward_id} to {event['player_id']}")
-                # TODO: Здесь в будущем будет запись в таблицу outbox_events
+                reward_payload = {
+                    "player_id": event["player_id"],
+                    "reward_id": ach.reward_id,
+                    "achievement_id": ach.id
+                }
+                outbox_event = OutboxEvent(
+                    event_type="send_reward",
+                    payload=reward_payload,
+                    status="PENDING"
+                )
+                self.db.add(outbox_event)
+                print(f"OUTBOX: Scheduled reward {ach.reward_id} for {event['player_id']}")
 
         await self.db.commit()
 
@@ -59,11 +69,11 @@ async def main() -> None:
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=10)
         queue = await channel.declare_queue("events_queue", durable=True)
-        
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
                     await process_event(json.loads(message.body.decode()))
+
 
 if __name__ == "__main__":
     asyncio.run(main())

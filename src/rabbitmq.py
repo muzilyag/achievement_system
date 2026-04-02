@@ -5,6 +5,7 @@ from aio_pika.abc import AbstractConnection, AbstractChannel
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
+
 class RabbitMQClient:
     def __init__(self):
         self.connection: AbstractConnection | None = None
@@ -26,5 +27,6 @@ class RabbitMQClient:
             aio_pika.Message(body=json.dumps(event_dict).encode()),
             routing_key=queue.name,
         )
+
 
 rabbitmq_client = RabbitMQClient()
