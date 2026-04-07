@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from src.schemas import EventPayload, AchievementCreate, AchievementRead
@@ -56,3 +57,17 @@ async def get_player_progress(player_id: str, db: AsyncSession = Depends(get_db)
             }
             for p in progress_records
     ]
+
+
+@app.delete("/progress/{player_id}/{achievement_id}")
+async def delete_player_progress(player_id: str, achievement_id: int, db: AsyncSession = Depends(get_db)):
+    query = delete(models.PlayerProgress).where(
+            models.PlayerProgress.player_id == player_id,
+            models.PlayerProgress.achievement_id == achievement_id
+    )
+    await db.execute(query)
+    await db.commit()
+    return {
+        "status": "success",
+        "message": "Progress reset"
+    }
