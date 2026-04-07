@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from src.schemas import EventPayload, AchievementCreate, AchievementRead
 from src.database import engine, get_db
 import src.models as models
@@ -40,3 +41,18 @@ async def create_achievement(achievement: AchievementCreate, db: AsyncSession = 
 async def receive_event(event: EventPayload):
     await rabbitmq_client.publish_event(event.model_dump())
     return {"status": "ok", "data": event.model_dump()}
+
+
+@app.get("/progress/{player_id}")
+async def get_player_progress(player_id: str, db: AsyncSession = Depends(get_db)):
+    query = select(models.PlayerProgress).where(models.PlayerProgress.player_id == player_id)
+    result = await db.execute(query)
+    progress_records = result.scalars().all()
+    return [
+            {
+                "achievement_id": p.achievement_id,
+                "current_value": p.current_value,
+                "is_completed": p.is_completed
+            }
+            for p in progress_records
+    ]
