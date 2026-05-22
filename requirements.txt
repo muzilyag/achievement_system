@@ -26,3 +26,5 @@ uvicorn==0.42.0
 yarl==1.23.0
 python-dotenv
 httpx
+pytest
+websockets

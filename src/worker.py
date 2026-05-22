@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import aio_pika
+from aio_pika.abc import AbstractChannel
 from sqlalchemy.future import select
 from src.database import async_session_maker
 from src.models import Achievement, PlayerProgress, OutboxEvent
@@ -9,10 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
-
 class AchievementManager:
-    def __init__(self, db_session: AsyncSession):
+    def __init__(self, db_session: AsyncSession, mq_channel: AbstractChannel):
         self.db = db_session
+        self.mq_channel = mq_channel
 
     async def handle_event(self, event: dict) -> None:
         query = select(Achievement).where(Achievement.action_type == event["action_type"])
@@ -40,7 +41,6 @@ class AchievementManager:
             just_completed = progress.check_completion(ach.target_value)
 
             if just_completed:
-                print(f"REWARD TRIGGER: Send {ach.reward_id} to {event['player_id']}")
                 reward_payload = {
                     "player_id": event["player_id"],
                     "reward_id": ach.reward_id,
@@ -52,16 +52,24 @@ class AchievementManager:
                     status="PENDING"
                 )
                 self.db.add(outbox_event)
-                print(f"OUTBOX: Scheduled reward {ach.reward_id} for {event['player_id']}")
+
+                exchange = await self.mq_channel.declare_exchange("realtime_notifications", aio_pika.ExchangeType.FANOUT)
+                notification = {
+                    "player_id": event["player_id"],
+                    "achievement_title": ach.name,
+                    "reward": ach.reward_id
+                }
+                await exchange.publish(
+                    aio_pika.Message(body=json.dumps(notification).encode()),
+                    routing_key=""
+                )
 
         await self.db.commit()
 
-
-async def process_event(event_data: dict) -> None:
+async def process_event(event_data: dict, mq_channel: AbstractChannel) -> None:
     async with async_session_maker() as db:
-        manager = AchievementManager(db)
+        manager = AchievementManager(db, mq_channel)
         await manager.handle_event(event_data)
-
 
 async def main() -> None:
     connection = await aio_pika.connect_robust(RABBITMQ_URL)
@@ -72,8 +80,7 @@ async def main() -> None:
         async with queue.iterator() as queue_iter:
             async for message in queue_iter:
                 async with message.process():
-                    await process_event(json.loads(message.body.decode()))
-
+                    await process_event(json.loads(message.body.decode()), channel)
 
 if __name__ == "__main__":
     asyncio.run(main())
